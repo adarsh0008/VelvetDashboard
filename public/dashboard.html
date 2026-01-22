@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard | Velvet Junction</title>
+
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="dashboard-light">
+
+<div class="dashboard-container">
+
+    <!-- ================= SIDEBAR ================= -->
+    <nav class="sidebar">
+
+        <div class="brand-logo">
+            <img 
+                src="https://storage.googleapis.com/msgsndr/z564sMeUVeNjJZEOUBYt/media/6963430ee18638390ebde15e.png" 
+                alt="Velvet Junction Logo"
+            >
+        </div>
+
+        <div class="profile-section">
+            <img id="userAvatar" src="" alt="User Avatar">
+            <h3 id="userName">Welcome</h3>
+            <span class="user-role">Premium User</span>
+        </div>
+
+        <ul class="menu">
+            <li class="active" onclick="showSection('wallet', this)">💳 <span>Wallet</span></li>
+            <li onclick="showSection('models', this)">🤖 <span>Models</span></li>
+            <li onclick="showSection('credit-history', this)">📊 <span>Credit History</span></li>
+            <li onclick="showSection('chat-history', this)">💬 <span>Chat History</span></li>
+            <li onclick="showSection('orders', this)">🛒 <span>My Orders</span></li>
+        </ul>
+
+        <div class="logout-btn" onclick="window.location.href='/logout'">Logout</div>
+    </nav>
+
+    <!-- ================= MAIN CONTENT ================= -->
+    <main class="content">
+
+        <!-- ===== WALLET ===== -->
+        <section id="wallet" class="section">
+            <h2>Dashboard Overview</h2>
+
+            <div class="stats-grid">
+                <div class="stat-card highlight">
+                    <p>Available Credits</p>
+                    <h1 id="creditCount">0</h1>
+                    <button class="buy-btn" onclick="openTopUp()">Top Up Credits</button>
+
+                </div>
+
+                <div class="stat-card">
+                    <p>Active Models</p>
+                    <h1 id="activeModels">0</h1>
+                </div>
+
+                <div class="stat-card">
+                    <p>Total Chats</p>
+                    <h1 id="totalChats">0</h1>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== MODELS ===== -->
+        <section id="models" class="section" style="display:none;">
+            <h2>Available Models</h2>
+            <div id="modelsGrid" class="models-grid"></div>
+        </section>
+
+        <!-- ===== CREDIT HISTORY ===== -->
+        <section id="credit-history" class="section" style="display:none;">
+            <h2>Credit History</h2>
+            <div id="creditHistoryList" class="list-container"></div>
+        </section>
+
+        <!-- ===== CHAT HISTORY ===== -->
+        <section id="chat-history" class="section" style="display:none;">
+            <h2>Chat History</h2>
+            <div id="chatHistoryList" class="list-container"></div>
+        </section>
+
+        <!-- ===== ORDERS ===== -->
+        <section id="orders" class="section" style="display:none;">
+            <h2>My Orders</h2>
+            <div id="ordersList" class="list-container"></div>
+        </section>
+
+    </main>
+    <!-- ================= TOP UP MODAL ================= -->
+<div id="topUpModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Top Up Credits</h3>
+            <span class="close-modal" onclick="closeTopUp()">&times;</span>
+        </div>
+
+        <div id="plansGrid" class="plans-grid">
+            <!-- Plans injected by dashboard.js -->
+        </div>
+    </div>
+</div>
+
+
+</div>
+<!-- ================= CALL POPUP ================= -->
+<div id="callPopup" class="call-popup hidden">
+  <div class="call-box">
+    <h3>Call in Progress</h3>
+    <div id="callTimer">00:00</div>
+
+    <button id="hangupBtn" class="hangup-btn">
+      Hang Up
+    </button>
+  </div>
+</div>
+
+<script src="js/dashboard.js"></script>
+</body>
+</html>

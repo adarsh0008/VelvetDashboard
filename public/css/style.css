@@ -1,0 +1,712 @@
+/* =========================================================
+   GLOBAL VARIABLES (Shared: Login + Dashboard)
+========================================================= */
+:root {
+    --bg-dark: #0b0614;
+    --bg-panel: #140c24;
+
+    --purple-main: #7c3aed;
+    --purple-soft: #a78bfa;
+    --purple-glow: rgba(124, 58, 237, 0.45);
+
+    --text-muted: #c4b5fd;
+    --white: #ffffff;
+    --danger: #ef4444;
+
+    --glass: rgba(255, 255, 255, 0.05);
+}
+body.dashboard-light {
+    --bg-dark: #f7f5ff;
+    --bg-panel: #ffffff;
+
+    --white: #1f1f1f;
+    --text-muted: #6b5fb5;
+
+    --glass: rgba(124, 58, 237, 0.06);
+}
+
+/* =========================================================
+   RESET
+========================================================= */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* =========================================================
+   BASE BODY (Dashboard default)
+   Login page overrides this using .login-page
+========================================================= */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--white);
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* =========================================================
+   ================= LOGIN PAGE (UNCHANGED)
+========================================================= */
+
+.login-page {
+    background: radial-gradient(circle at center, #1e113a 0%, #0b0614 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-overlay {
+    position: absolute;
+    inset: 0;
+    background: url('https://www.transparenttextures.com/patterns/dark-matter.png');
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.login-card {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 420px;
+    padding: 40px;
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 24px;
+    text-align: center;
+    box-shadow: 
+        0 20px 50px rgba(0, 0, 0, 0.5),
+        0 0 20px var(--purple-glow);
+}
+
+.login-logo {
+    max-width: 220px;
+    margin-bottom: 30px;
+}
+
+.login-content h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.login-content p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 35px;
+}
+
+.google-auth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #ffffff;
+    color: #1f1f1f;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: 0.3s ease;
+}
+
+.google-auth-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(124, 58, 237, 0.3);
+}
+
+.login-footer {
+    margin-top: 30px;
+    font-size: 0.75rem;
+    color: rgba(196, 181, 253, 0.5);
+}
+
+/* =========================================================
+   ================= DASHBOARD LAYOUT
+========================================================= */
+
+.dashboard-container {
+    display: flex;
+    height: 100vh;
+}
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
+.sidebar {
+    width: 260px;
+    background: linear-gradient(180deg, #160d26, #0b0614);
+    border-right: 1px solid rgba(124, 58, 237, 0.2);
+    display: flex;
+    flex-direction: column;
+    padding: 26px 20px;
+}
+
+.brand-logo {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 36px;
+}
+
+.profile-section {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--glass);
+}
+
+.profile-section img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 2px solid var(--purple-main);
+    box-shadow: 0 0 14px var(--purple-glow);
+    margin-bottom: 8px;
+}
+
+.profile-section h3 {
+    font-size: 1rem;
+}
+
+.user-role {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* MENU */
+.menu {
+    list-style: none;
+}
+
+.menu li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    transition: 0.25s ease;
+}
+
+.menu li:hover,
+.menu li.active {
+    background: linear-gradient(90deg, var(--purple-main), var(--purple-soft));
+    color: white;
+    box-shadow: 0 0 12px var(--purple-glow);
+}
+
+/* LOGOUT */
+.logout-btn {
+    margin-top: auto;
+    padding: 12px;
+    text-align: center;
+    color: var(--danger);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.logout-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* =========================================================
+   MAIN CONTENT
+========================================================= */
+.content {
+    flex: 1;
+    padding: 40px;
+    overflow-y: auto;
+    background: radial-gradient(circle at top right, #1e113a, #0b0614);
+}
+
+/* SECTION TITLE */
+.section h2 {
+    font-size: 1.8rem;
+    margin-bottom: 30px;
+    background: linear-gradient(to right, #ffffff, var(--purple-soft));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* =========================================================
+   DASHBOARD STATS / CARDS
+========================================================= */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+.stat-card {
+    background: var(--glass);
+    backdrop-filter: blur(14px);
+    border-radius: 20px;
+    padding: 30px;
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    text-align: center;
+}
+
+.stat-card p {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+}
+
+.stat-card h1 {
+    font-size: 3rem;
+    color: var(--purple-soft);
+}
+
+.stat-card.highlight {
+    box-shadow: 0 0 26px var(--purple-glow);
+}
+
+/* BUTTON */
+.buy-btn {
+    margin-top: 18px;
+    padding: 12px 26px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(90deg, var(--purple-main), var(--purple-soft));
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s ease;
+}
+
+.buy-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px var(--purple-glow);
+}
+
+/* =========================================================
+   LIST CONTAINERS (Agents, Orders, History)
+========================================================= */
+.list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.list-item {
+    background: var(--glass);
+    padding: 18px 20px;
+    border-radius: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid transparent;
+    transition: 0.25s;
+}
+
+.list-item:hover {
+    border-color: var(--purple-main);
+    background: rgba(124, 58, 237, 0.08);
+}
+
+.status-tag {
+    background: var(--purple-main);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+}
+.brand-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 36px;
+}
+
+.brand-logo img {
+    max-width: 180px;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px rgba(124, 58, 237, 0.35));
+}
+/* =========================
+   LOGIN PAGE IMPROVEMENTS
+========================= */
+
+.login-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+/* Slightly stronger card presence */
+.login-card {
+    animation: fadeUp 0.6s ease;
+}
+
+/* Brand */
+.brand-header {
+    margin-bottom: 26px;
+}
+
+.login-logo {
+    max-width: 190px;
+    filter: drop-shadow(0 0 16px rgba(124, 58, 237, 0.45));
+}
+
+/* Headline */
+.login-content h1 {
+    font-size: 1.9rem;
+    font-weight: 700;
+    margin-bottom: 14px;
+    line-height: 1.25;
+}
+
+.login-content p {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    max-width: 340px;
+    margin: 0 auto 32px;
+}
+
+/* Google Button - less dominant, more elegant */
+.google-auth-btn {
+    gap: 14px;
+    background: linear-gradient(180deg, #ffffff, #f4f4f4);
+    border-radius: 14px;
+    padding: 14px 26px;
+    font-size: 1rem;
+}
+
+.google-auth-btn img {
+    width: 22px;
+    height: 22px;
+}
+
+/* Footer */
+.login-footer a {
+    color: var(--purple-soft);
+    text-decoration: none;
+}
+
+.login-footer a:hover {
+    text-decoration: underline;
+}
+
+/* ===============================
+   MODELS GRID (Dashboard)
+================================ */
+
+.models-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 24px;
+}
+
+/* Individual Model Card */
+.model-card {
+    background: var(--glass);
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    backdrop-filter: blur(14px);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    text-align: center;
+}
+
+.model-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px rgba(124, 58, 237, 0.35);
+}
+
+/* Image */
+.model-card img {
+    width: 100%;
+    height: 284px;
+    object-fit: cover;
+}
+
+/* Content */
+.model-card-content {
+    padding: 16px;
+}
+
+.model-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.model-rate {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+/* Action button */
+.model-action-btn {
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(90deg, var(--purple-main), var(--purple-soft));
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.25s ease;
+}
+
+.model-action-btn:hover {
+    box-shadow: 0 10px 22px var(--purple-glow);
+}
+
+/* ===============================
+   TOP UP MODAL
+================================ */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 5, 25, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.modal-box {
+    width: 100%;
+    max-width: 900px;
+    background: var(--bg-dark);
+    border-radius: 22px;
+    padding: 30px;
+    border: 1px solid rgba(124,58,237,0.35);
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.modal-header h3 {
+    font-size: 1.4rem;
+}
+
+.close-modal {
+    font-size: 1.8rem;
+    cursor: pointer;
+    opacity: 0.7;
+}
+.close-modal:hover {
+    opacity: 1;
+}
+
+/* ===============================
+   PLANS GRID
+================================ */
+
+.plans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 22px;
+}
+
+.plan-card {
+    background: linear-gradient(180deg, rgba(124,58,237,0.15), rgba(0,0,0,0.2));
+    border: 1px solid rgba(124,58,237,0.3);
+    border-radius: 18px;
+    padding: 22px;
+    text-align: center;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.plan-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px rgba(124,58,237,0.35);
+}
+
+.plan-title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 12px;
+}
+
+.plan-price {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--purple-soft);
+    margin-bottom: 10px;
+}
+
+.plan-meta {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+}
+
+.plan-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    background: linear-gradient(90deg, var(--purple-main), var(--purple-soft));
+    border: none;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+}
+.plan-btn:hover {
+    box-shadow: 0 10px 22px var(--purple-glow);
+}
+
+/* Featured */
+.plan-card.featured {
+    border: 2px solid var(--purple-soft);
+    background: linear-gradient(180deg, rgba(124,58,237,0.35), rgba(0,0,0,0.4));
+}
+
+/* ===============================
+   SKELETON LOADER
+================================ */
+
+.skeleton-card {
+    height: 220px;
+    border-radius: 18px;
+    background: linear-gradient(
+        100deg,
+        rgba(124,58,237,0.08) 25%,
+        rgba(124,58,237,0.18) 37%,
+        rgba(124,58,237,0.08) 63%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    border: 1px solid rgba(124,58,237,0.25);
+}
+
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 100% 0;
+    }
+    100% {
+        background-position: -100% 0;
+    }
+}
+/* ===============================
+   Call popup
+================================ */
+
+.call-popup {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 5, 20, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.call-popup.hidden {
+  display: none;
+}
+
+.call-box {
+  background: radial-gradient(circle at top, #2a1650, #0b0614);
+  padding: 30px 40px;
+  border-radius: 18px;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.5);
+}
+
+#callTimer {
+  font-size: 2rem;
+  margin: 15px 0;
+  color: #a78bfa;
+}
+
+.hangup-btn {
+  background: #ef4444;
+  border: none;
+  color: white;
+  padding: 12px 28px;
+  border-radius: 999px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.dashboard-light .sidebar {
+    background: linear-gradient(180deg, #ffffff, #f3efff);
+    border-right: 1px solid rgba(124,58,237,0.2);
+}
+
+.dashboard-light .menu li {
+    color: #5b4db7;
+}
+
+.dashboard-light .menu li.active,
+.dashboard-light .menu li:hover {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    color: #ffffff;
+}
+.dashboard-light .content {
+    background: #f7f5ff;
+}
+.dashboard-light .stat-card,
+.dashboard-light .list-item,
+.dashboard-light .model-card,
+.dashboard-light .plan-card {
+    background: #ffffff;
+    border: 1px solid rgba(124,58,237,0.18);
+    box-shadow: 0 10px 30px rgba(124,58,237,0.12);
+}
+
+.dashboard-light .stat-card h1 {
+    color: #7c3aed;
+}
+.dashboard-light .buy-btn,
+.dashboard-light .model-action-btn,
+.dashboard-light .plan-btn {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    color: #ffffff;
+}
+
+.dashboard-light {
+  color: #1f1f1f; /* global readable text */
+}
+
+.dashboard-light .content,
+.dashboard-light .section {
+  color: #1f1f1f;
+}
+
+.dashboard-light h1,
+.dashboard-light h2,
+.dashboard-light h3 {
+  color: #3b2ea8; /* purple heading */
+}
+
+.dashboard-light p,
+.dashboard-light span {
+  color: #4b4b4b;
+}
+
+/* Animation */
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
