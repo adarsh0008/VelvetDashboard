@@ -288,16 +288,21 @@ app.post('/webhooks/ghl/model', async (req, res) => {
     const recordId = payload.id;
 
     await Model.findOneAndUpdate(
-      { recordId },
-      {
-        recordId,
-        name: payload.name,
-        imageUrl: payload.imageUrl,
-        ratePerMinute: Number(payload.ratePerMinute) || 1,
-        status: payload.status || 'active'
-      },
-      { upsert: true, new: true }
-    );
+  { recordId },
+  {
+    recordId,
+    name: payload.name,
+    imageUrl: payload.imageUrl,
+    ratePerMinute: Number(payload.ratePerMinute) || 1,
+
+    // 🔥 map GHL → Mongo
+    elevenLabsAgentId: payload.ElevenLabID || payload.ElevenLabID || null,
+
+    status: payload.status || 'active'
+  },
+  { upsert: true, new: true }
+);
+
 
     return res.status(200).json({ success: true });
 
@@ -464,6 +469,79 @@ app.get('/api/user/credits', ensureAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch credits' });
   }
 });
+// ===============================
+// CALL END → DEDUCT CREDITS (SECONDS BASED)
+// ===============================
+app.post('/api/call/end', ensureAuth, async (req, res) => {
+  try {
+    const { durationSeconds } = req.body;
+
+    if (!durationSeconds || durationSeconds <= 0) {
+      return res.status(400).json({ error: 'Invalid duration' });
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    /* ===============================
+       SAFETY INITIALIZATION
+    ================================ */
+
+    if (!user.wallet) {
+      user.wallet = { balance: 0 };
+    }
+
+    if (typeof user.wallet.balance !== 'number') {
+      user.wallet.balance = 0;
+    }
+
+    if (!user.creditHistory) {
+      user.creditHistory = [];
+    }
+
+    /* ===============================
+       CREDIT CALCULATION
+       1 second = 1 credit
+    ================================ */
+
+    const creditsToDeduct = Math.ceil(durationSeconds);
+
+    const previousBalance = user.wallet.balance;
+
+    user.wallet.balance = Math.max(
+      0,
+      user.wallet.balance - creditsToDeduct
+    );
+
+    /* ===============================
+       CREDIT HISTORY LOG
+    ================================ */
+
+    user.creditHistory.push({
+      amount: -creditsToDeduct,
+      description: `Call duration ${durationSeconds} sec`,
+      date: new Date()
+    });
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      deductedCredits: creditsToDeduct,
+      previousBalance,
+      remainingCredits: user.wallet.balance
+    });
+
+  } catch (err) {
+    console.error('❌ Call end credit error:', err);
+    res.status(500).json({ error: 'Failed to deduct credits' });
+  }
+});
+
+
 
 /* ===============================
     Eleven Labs Code

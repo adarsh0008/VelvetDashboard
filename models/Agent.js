@@ -15,14 +15,18 @@ const ModelSchema = new mongoose.Schema({
     required: true
   },
 
-  imageUrl: {
-    type: String
-  },
+  imageUrl: String,
 
   ratePerMinute: {
     type: Number,
     default: 1,
     min: 0
+  },
+
+  // 🔥 NEW: ElevenLabs Agent ID
+  elevenLabsAgentId: {
+    type: String,
+    index: true
   },
 
   status: {

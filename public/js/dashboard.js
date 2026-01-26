@@ -44,7 +44,7 @@ async function loadModels() {
                     <div class="model-rate">
                         ${model.ratePerMinute} credits / minute
                     </div>
-                    <button class="model-action-btn" onclick="startCall('agent_2901ke23nkd6excsf728jsw4nbez')">
+                    <button class="model-action-btn" onclick="startCall('agent_${model.elevenLabsAgentId}')">
                         Talk Now
                     </button>
                 </div>
@@ -94,6 +94,8 @@ function showSection(id, el) {
 let socket = null;
 let callTimerInterval = null;
 let secondsElapsed = 0;
+let callStartedAt = null; // 🔥 call start timestamp
+
 
 // ======================
 // POPUP
@@ -294,21 +296,66 @@ function startCall(modelId) {
     alert("Invalid agent");
     return;
   }
-
+callStartedAt = Date.now(); // ⏱️ START TIME
   openCallPopup();
   startCallTimer();
   connectElevenLabsAgent(modelId);
 }
 
+
+
+// ======================
+// Calculate Call Duration
+// ======================
+
+function getCallDurationSeconds() {
+  if (!callStartedAt) return 0;
+
+  const endedAt = Date.now();
+  const durationMs = endedAt - callStartedAt;
+
+  callStartedAt = null; // reset for next call
+
+  return Math.ceil(durationMs / 1000); // 🔥 seconds
+}
+// ======================
+// send Call Duration
+// ======================
+
+async function sendCallDurationToServer(durationSeconds) {
+  try {
+    const res = await fetch('/api/call/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ durationSeconds })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      document.getElementById('creditCount').innerText =
+        data.remainingCredits;
+
+      console.log(
+        `💸 ${data.deductedCredits} credits deducted. Remaining: ${data.remainingCredits}`
+      );
+    }
+
+  } catch (err) {
+    console.error('❌ Failed to update credits:', err);
+  }
+}
 // ======================
 // HANGUP
 // ======================
-document.getElementById("hangupBtn")?.addEventListener("click", () => {
-  console.log("📴 Call ended by user");
+document.getElementById("hangupBtn")?.addEventListener("click", async () => {
+  const durationSeconds = getCallDurationSeconds();
 
-  try {
-    stopStreaming?.();
-  } catch (e) {}
+  console.log("📞 Call duration (seconds):", durationSeconds);
+
+  await sendCallDurationToServer(durationSeconds);
+
+  stopStreaming?.();
 
   if (socket) {
     socket.close();
