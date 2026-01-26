@@ -15,6 +15,15 @@
 
     --glass: rgba(255, 255, 255, 0.05);
 }
+body.dashboard-light {
+    --bg-dark: #f7f5ff;
+    --bg-panel: #ffffff;
+
+    --white: #1f1f1f;
+    --text-muted: #6b5fb5;
+
+    --glass: rgba(124, 58, 237, 0.06);
+}
 
 /* =========================================================
    RESET
@@ -634,6 +643,61 @@ body {
   cursor: pointer;
 }
 
+.dashboard-light .sidebar {
+    background: linear-gradient(180deg, #ffffff, #f3efff);
+    border-right: 1px solid rgba(124,58,237,0.2);
+}
+
+.dashboard-light .menu li {
+    color: #5b4db7;
+}
+
+.dashboard-light .menu li.active,
+.dashboard-light .menu li:hover {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    color: #ffffff;
+}
+.dashboard-light .content {
+    background: #f7f5ff;
+}
+.dashboard-light .stat-card,
+.dashboard-light .list-item,
+.dashboard-light .model-card,
+.dashboard-light .plan-card {
+    background: #ffffff;
+    border: 1px solid rgba(124,58,237,0.18);
+    box-shadow: 0 10px 30px rgba(124,58,237,0.12);
+}
+
+.dashboard-light .stat-card h1 {
+    color: #7c3aed;
+}
+.dashboard-light .buy-btn,
+.dashboard-light .model-action-btn,
+.dashboard-light .plan-btn {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    color: #ffffff;
+}
+
+.dashboard-light {
+  color: #1f1f1f; /* global readable text */
+}
+
+.dashboard-light .content,
+.dashboard-light .section {
+  color: #1f1f1f;
+}
+
+.dashboard-light h1,
+.dashboard-light h2,
+.dashboard-light h3 {
+  color: #3b2ea8; /* purple heading */
+}
+
+.dashboard-light p,
+.dashboard-light span {
+  color: #4b4b4b;
+}
 
 /* Animation */
 @keyframes fadeUp {
