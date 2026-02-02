@@ -224,6 +224,101 @@ async function syncProductsFromGHL() {
   return Product.find().sort({ price: 1 });
 }
 
+
+/* ===============================
+   Create invoice in GHL (DRAFT)
+  ================================ */
+async function createInvoice({ contact, product, amount, invoiceNumber }) {
+  try {
+    const payload = {
+      altId: process.env.GHL_LOCATION_ID,
+      altType: 'location',
+      name: `Invoice for ${product.name}`,
+      currency: 'USD',
+
+      businessDetails: {
+        name: 'Velvet Junction'
+      },
+
+      items: [
+        {
+          name: product.name,
+          productId: product.productId,
+          priceId: product.price?.priceId || 'manual',
+          qty: 1,
+          amount,
+          currency: 'USD',
+          type: 'one_time'
+        }
+      ],
+
+      contactDetails: {
+        id: contact.contactId,
+        name: contact.name,
+        email: contact.email
+      },
+
+      invoiceNumber,
+      issueDate: new Date().toISOString().slice(0, 10),
+      dueDate: new Date().toISOString().slice(0, 10),
+      liveMode: true,
+      automaticTaxesEnabled: false
+    };
+
+    const res = await axios.post(
+      `${GHL_BASE}/invoices/`,
+      payload,
+      { headers: GHL_HEADERS }
+    );
+
+    console.log('🧾 GHL invoice created:', res.data._id);
+
+    // ✅ IMPORTANT FIX HERE
+    return res.data || null;
+
+  } catch (err) {
+    console.error(
+      '❌ GHL createInvoice error:',
+      err.response?.data || err.message
+    );
+    return null;
+  }
+}
+
+
+/* ===============================
+   record  invoice payment in GHL
+  ================================ */
+  // 💰 Record payment for invoice
+async function recordInvoicePayment(invoiceId, amount) {
+  try {
+    const payload = {
+      altId: process.env.GHL_LOCATION_ID,
+      altType: 'location',
+      mode: 'other',
+      notes: 'Payment from dashboard (Stripe)',
+      amount,
+      fulfilledAt: new Date().toISOString()
+    };
+
+    const res = await axios.post(
+      `${GHL_BASE}/invoices/${invoiceId}/record-payment`,
+      payload,
+      { headers: GHL_HEADERS }
+    );
+
+    return res.data || null;
+
+  } catch (err) {
+    console.error(
+      '❌ GHL recordPayment error:',
+      err.response?.data || err.message
+    );
+    return null;
+  }
+}
+
+
 /* ===============================
    EXPORTS
 ================================ */
@@ -233,5 +328,7 @@ module.exports = {
   createContact,
   fetchProducts,
   fetchProductPrice,
-  syncProductsFromGHL
+  syncProductsFromGHL,
+  createInvoice,
+  recordInvoicePayment
 };

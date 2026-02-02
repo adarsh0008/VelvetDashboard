@@ -32,9 +32,9 @@
         </div>
 
         <ul class="menu">
-            <li class="active" onclick="showSection('wallet', this)">💳 <span>Wallet</span></li>
+            <li class="active" onclick="showSection('wallet', this)">📊 <span>Dashboard</span></li>
             <li onclick="showSection('models', this)">🤖 <span>Models</span></li>
-            <li onclick="showSection('credit-history', this)">📊 <span>Credit History</span></li>
+            <!--<li onclick="showSection('credit-history', this)"> <span>Credit History</span></li>-->
             <li onclick="showSection('chat-history', this)">💬 <span>Chat History</span></li>
             <li onclick="showSection('orders', this)">🛒 <span>My Orders</span></li>
         </ul>
@@ -63,7 +63,7 @@
                 </div>
 
                 <div class="stat-card">
-                    <p>Total Chats</p>
+                    <p>Total Calls</p>
                     <h1 id="totalChats">0</h1>
                 </div>
             </div>
@@ -75,15 +75,15 @@
             <div id="modelsGrid" class="models-grid"></div>
         </section>
 
-        <!-- ===== CREDIT HISTORY ===== -->
+        <!-- ===== CREDIT HISTORY 
         <section id="credit-history" class="section" style="display:none;">
             <h2>Credit History</h2>
             <div id="creditHistoryList" class="list-container"></div>
-        </section>
+        </section> ===== -->
 
         <!-- ===== CHAT HISTORY ===== -->
         <section id="chat-history" class="section" style="display:none;">
-            <h2>Chat History</h2>
+            <h2>Call History</h2>
             <div id="chatHistoryList" class="list-container"></div>
         </section>
 

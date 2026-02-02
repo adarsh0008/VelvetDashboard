@@ -2,20 +2,28 @@
 const Stripe = require('stripe');
 const User = require('../models/User');
 const Product = require('../models/Product');
+const Purchase = require('../models/Purchase');
+const {
+  createInvoice,
+  recordInvoicePayment
+} = require('./ghlService');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-async function createCheckoutSession({ userId, product }) {
+/**
+ * Create Stripe Checkout Session
+ */
+async function createCheckoutSession({ userId, product, purchaseId }) {
   const credits = product.credits || 50;
-  
-  return await stripe.checkout.sessions.create({
+
+  return stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
-    
+
     line_items: [
       {
         price_data: {
-          currency: product.currency.toLowerCase() || 'usd',
+          currency: (product.currency || 'usd').toLowerCase(),
           unit_amount: Math.round(product.price * 100),
           product_data: {
             name: product.name,
@@ -30,6 +38,7 @@ async function createCheckoutSession({ userId, product }) {
     cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard.html?payment=cancel`,
 
     metadata: {
+      purchaseId: purchaseId.toString(),
       userId: userId.toString(),
       productId: product.productId || product._id.toString(),
       productName: product.name,
@@ -39,103 +48,153 @@ async function createCheckoutSession({ userId, product }) {
   });
 }
 
+/**
+ * Handle Stripe checkout.session.completed webhook
+ * Idempotent & race-condition safe
+ */
 async function handleCheckoutCompleted(session) {
   try {
-    console.log('🔄 Processing Stripe webhook for session:', session.id);
-    
-    const { userId, productId, credits } = session.metadata;
+    console.log('🔄 Processing Stripe webhook:', session.id);
 
-    if (!userId || !credits) {
-      console.error('❌ Missing metadata in session:', session.id);
-      throw new Error('Missing required metadata');
+    const { purchaseId, userId, productId, credits } = session.metadata || {};
+
+    if (!purchaseId || !userId || !credits) {
+      console.error('❌ Missing metadata:', session.id);
+      return; // ⚠️ DO NOT throw (Stripe retries forever)
     }
 
-    // Find user
+    /* ===============================
+       1. ATOMIC PURCHASE UPDATE
+    ================================ */
+
+    const purchase = await Purchase.findOneAndUpdate(
+      {
+        _id: purchaseId,
+        status: { $ne: 'paid' }
+      },
+      {
+        $set: {
+          status: 'paid',
+          stripeSessionId: session.id,
+          paymentIntentId: session.payment_intent
+        }
+      },
+      { new: true }
+    );
+
+    // Duplicate webhook → already processed
+    if (!purchase) {
+      console.log('⚠️ Purchase already processed:', purchaseId);
+      return;
+    }
+
+    /* ===============================
+       2. FETCH USER
+    ================================ */
+
     const user = await User.findById(userId);
     if (!user) {
       console.error(`❌ User not found: ${userId}`);
-      throw new Error('User not found');
+      return;
     }
 
-    console.log('👤 Current user wallet:', user.wallet);
+    // Wallet safety
+    if (!user.wallet) user.wallet = { balance: 0 };
+    if (user.wallet.balance == null) user.wallet.balance = 0;
 
-    // Initialize wallet if it doesn't exist
-    if (!user.wallet) {
-      user.wallet = { balance: 0 };
-      console.log('📦 Initialized new wallet');
-    }
+    const creditsToAdd = Number(credits);
+    const previousBalance = user.wallet.balance;
 
-    // Ensure wallet has balance field
-    if (user.wallet.balance === undefined || user.wallet.balance === null) {
-      user.wallet.balance = 0;
-      console.log('📝 Set default balance to 0');
-    }
+    user.wallet.balance += creditsToAdd;
 
-    // Add credits to balance
-    const creditsToAdd = parseInt(credits, 10);
-    const currentBalance = user.wallet.balance || 0;
-    const newBalance = currentBalance + creditsToAdd;
-    
-    user.wallet.balance = newBalance;
+    // Arrays safety
+    if (!Array.isArray(user.creditHistory)) user.creditHistory = [];
+    if (!Array.isArray(user.transactions)) user.transactions = [];
 
-    // Initialize creditHistory if it doesn't exist
-    if (!user.creditHistory) {
-      user.creditHistory = [];
-      console.log('📦 Initialized creditHistory array');
-    }
-
-    // Add to credit history
     user.creditHistory.push({
       amount: creditsToAdd,
-      description: `Credit purchase via Stripe - Session: ${session.id.slice(0, 10)}...`,
+      description: `Credit purchase via Stripe (${session.id.slice(0, 10)}...)`,
       date: new Date(),
       type: 'purchase',
       status: 'completed'
     });
 
-    // Also add to transactions if field exists
-    if (!user.transactions) {
-      user.transactions = [];
-    }
-
     user.transactions.push({
       type: 'credit_purchase',
       amount: creditsToAdd,
       stripeSessionId: session.id,
-      productId: productId,
+      productId,
       date: new Date(),
       status: 'completed'
     });
 
-    // Save the user
     await user.save();
 
-    console.log(`✅ ${creditsToAdd} credits added to user ${userId}.`);
-    console.log(`💰 Old balance: ${currentBalance}`);
-    console.log(`💰 New balance: ${newBalance}`);
+    console.log(`✅ ${creditsToAdd} credits added to user ${userId}`);
+    console.log(`💰 ${previousBalance} → ${user.wallet.balance}`);
 
-    // Update product purchase count
+    /* ===============================
+       3. PRODUCT STATS (NON-CRITICAL)
+    ================================ */
+
+    let product = null;
+
     if (productId) {
       try {
-        await Product.findOneAndUpdate(
-          { productId: productId },
+        product = await Product.findOneAndUpdate(
+          { productId },
           { $inc: { purchaseCount: 1 } },
           { new: true }
         );
-        console.log(`✅ Purchase count updated for product ${productId}`);
-      } catch (productErr) {
-        console.error('⚠️ Could not update product purchase count:', productErr.message);
+      } catch (err) {
+        console.error('⚠️ Product count update failed:', err.message);
       }
     }
 
-    return user;
+    /* ===============================
+       4. 🧾 CREATE GHL INVOICE (DRAFT)
+    ================================ */
+
+    if (product && user.ghl?.contactId) {
+      const invoice = await createInvoice({
+        contact: {
+          contactId: user.ghl.contactId,
+          name: user.displayName,
+          email: user.email
+        },
+        product,
+        amount: product.price?.amount || session.amount_total / 100,
+        invoiceNumber: `INV-${Date.now()}`
+      });
+
+      /* ===============================
+         5. 💰 RECORD PAYMENT
+      ================================ */
+
+const invoiceId = invoice?._id;
+
+console.log('🧾 GHL Invoice ID:', invoiceId);
+
+if (invoiceId) {
+  const amountToRecord =
+    product?.price?.amount ??
+    (session.amount_total ? session.amount_total / 100 : 0);
+
+  await recordInvoicePayment(invoiceId, amountToRecord);
+
+  console.log('💰 GHL payment recorded for invoice:', invoiceId);
+}
+ else {
+  console.warn('⚠️ Invoice created but ID missing, payment skipped');
+}
+    }
 
   } catch (error) {
-    console.error('❌ Error in handleCheckoutCompleted:', error);
-    console.error('Error stack:', error.stack);
-    throw error;
+    console.error('❌ Stripe webhook error:', error);
+    // ❗ DO NOT throw — prevents Stripe retry storms
   }
 }
+
 
 module.exports = {
   createCheckoutSession,

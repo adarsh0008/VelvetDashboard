@@ -20,7 +20,8 @@ const {
   handleCheckoutCompleted
 } = require('./services/stripeService');
 
-
+const CallLog = require('./models/CallLog');
+const Purchase = require('./models/Purchase');
 const app = express();
 const expressWs = require('express-ws')(app);
 const { createElevenLabsBridge } = require('./services/elevenLabsService');
@@ -256,10 +257,22 @@ app.post('/api/checkout/create', ensureAuth, async (req, res) => {
     if (!product || !product.price) {
       return res.status(404).json({ error: 'Product not found' });
     }
+    // 🔥 Create DB entry BEFORE Stripe
+    const purchase = await Purchase.create({
+      user: req.user._id,
+      productId: product.productId,
+      productName: product.name,
+      amount: product.price * 100,
+      currency: product.currency,
+      creditsAdded: product.credits,
+      status: 'initiated'
+    });
+
 
     const session = await createCheckoutSession({
       userId: req.user._id.toString(),
-      product
+      product,
+      purchaseId: purchase._id.toString() 
     });
 
     res.json({ checkoutUrl: session.url });
@@ -474,7 +487,12 @@ app.get('/api/user/credits', ensureAuth, async (req, res) => {
 // ===============================
 app.post('/api/call/end', ensureAuth, async (req, res) => {
   try {
-    const { durationSeconds } = req.body;
+    const { 
+      durationSeconds, 
+      agentId, 
+      startTime, 
+      endTime 
+    } = req.body;
 
     if (!durationSeconds || durationSeconds <= 0) {
       return res.status(400).json({ error: 'Invalid duration' });
@@ -486,29 +504,11 @@ app.post('/api/call/end', ensureAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    /* ===============================
-       SAFETY INITIALIZATION
-    ================================ */
-
-    if (!user.wallet) {
-      user.wallet = { balance: 0 };
-    }
-
-    if (typeof user.wallet.balance !== 'number') {
-      user.wallet.balance = 0;
-    }
-
-    if (!user.creditHistory) {
-      user.creditHistory = [];
-    }
-
-    /* ===============================
-       CREDIT CALCULATION
-       1 second = 1 credit
-    ================================ */
+    // Safety
+    if (!user.wallet) user.wallet = { balance: 0 };
+    if (!user.creditHistory) user.creditHistory = [];
 
     const creditsToDeduct = Math.ceil(durationSeconds);
-
     const previousBalance = user.wallet.balance;
 
     user.wallet.balance = Math.max(
@@ -516,17 +516,24 @@ app.post('/api/call/end', ensureAuth, async (req, res) => {
       user.wallet.balance - creditsToDeduct
     );
 
-    /* ===============================
-       CREDIT HISTORY LOG
-    ================================ */
-
     user.creditHistory.push({
       amount: -creditsToDeduct,
-      description: `Call duration ${durationSeconds} sec`,
+      description: `Call ${durationSeconds}s`,
       date: new Date()
     });
 
     await user.save();
+
+    // 🔥 SAVE CALL LOG
+    await CallLog.create({
+      user: user._id,
+      agentId,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      durationSeconds,
+      creditsUsed: creditsToDeduct,
+      status: 'completed'
+    });
 
     return res.json({
       success: true,
@@ -540,6 +547,60 @@ app.post('/api/call/end', ensureAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to deduct credits' });
   }
 });
+
+
+// ===============================
+// CALL HISTORY
+// ===============================
+app.get('/api/calls', ensureAuth, async (req, res) => {
+  try {
+    const calls = await CallLog.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // Fetch agent names
+    const agentIds = calls.map(c => c.agentId);
+    const agents = await Model.find({
+      elevenLabsAgentId: { $in: agentIds.map(id => id.replace('agent_', '')) }
+    });
+
+    const agentMap = {};
+    agents.forEach(a => {
+      agentMap['agent_' + a.elevenLabsAgentId] = a.name;
+    });
+
+    // Attach agentName
+    const finalCalls = calls.map(c => ({
+      ...c,
+      agentName: agentMap[c.agentId] || 'Unknown Agent'
+    }));
+
+    res.json(finalCalls);
+
+  } catch (err) {
+    console.error('❌ Fetch call history error:', err);
+    res.status(500).json({ error: 'Failed to fetch call history' });
+  }
+});
+
+
+// ===============================
+// ORDER HISTORY
+// ===============================
+app.get('/api/orders', ensureAuth, async (req, res) => {
+  try {
+    const orders = await Purchase.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(orders);
+  } catch (err) {
+    console.error('❌ Fetch orders error:', err);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
 
 
 
@@ -559,6 +620,32 @@ app.ws('/ws/elevenlabs', (ws, req) => {
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ===============================
+// DASHBOARD STATS
+// ===============================
+app.get('/api/dashboard/stats', ensureAuth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const [activeModels, totalChats] = await Promise.all([
+      Model.countDocuments({ status: 'active' }),
+      CallLog.countDocuments({ 
+        user: userId,
+        status: 'completed'
+      })
+    ]);
+
+    res.json({
+      activeModels,
+      totalChats
+    });
+
+  } catch (err) {
+    console.error('❌ Dashboard stats error:', err);
+    res.status(500).json({ error: 'Failed to load dashboard stats' });
+  }
 });
 
 /* ===============================

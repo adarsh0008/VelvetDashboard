@@ -1,6 +1,8 @@
 /* ===============================
    1. Load User Data
 ================================ */
+let activeAgentId = null;
+let waitingAudio = null;
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const response = await fetch('/api/user');
@@ -18,6 +20,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
         console.error('User load error:', err);
     }
+    // ======================
+// Load Dashboard Stats
+// ======================
+try {
+  const statsRes = await fetch('/api/dashboard/stats');
+  const stats = await statsRes.json();
+
+  document.getElementById('activeModels').innerText =
+    stats.activeModels ?? 0;
+
+  document.getElementById('totalChats').innerText =
+    stats.totalChats ?? 0;
+
+} catch (err) {
+  console.error('Stats load error:', err);
+}
+
 });
 
 /* ===============================
@@ -83,6 +102,13 @@ function showSection(id, el) {
     if (id === 'models') {
         loadModels();
     }
+    if (id === 'chat-history') {
+      loadCallHistory(); // 🔥 here
+    }
+    if (id === 'orders') {
+      loadOrders();
+    }
+
 }
 
 /* ===============================
@@ -106,6 +132,7 @@ function openCallPopup() {
 
 function closeCallPopup() {
   document.getElementById('callPopup')?.classList.add('hidden');
+  stopWaitingAudio();
   stopCallTimer();
 }
 
@@ -268,6 +295,7 @@ function connectElevenLabsAgent(agentId) {
       const msg = JSON.parse(event.data);
       if (msg.type === "audio" && msg.audio_event?.audio_base_64) {
         if (typeof playAgentAudio === "function") {
+          stopWaitingAudio();
           playAgentAudio(msg.audio_event.audio_base_64);
         }
       }
@@ -278,8 +306,16 @@ function connectElevenLabsAgent(agentId) {
 
   socket.onclose = () => {
     console.log("🔴 ElevenLabs connection closed");
+
+    // 🔥 Auto log call if disconnected
+    if (callStartedAt) {
+      const durationSeconds = getCallDurationSeconds();
+      sendCallDurationToServer(durationSeconds);
+    }
+
     stopStreaming?.();
     closeCallPopup();
+    resetCallState();
     socket = null;
   };
 
@@ -287,6 +323,30 @@ function connectElevenLabsAgent(agentId) {
     console.error("❌ WebSocket error:", err);
   };
 }
+// ======================
+// Call Connecting Ring 
+// ======================
+
+function playWaitingAudio() {
+  if (waitingAudio) return;
+
+  waitingAudio = new Audio('https://storage.googleapis.com/msgsndr/z564sMeUVeNjJZEOUBYt/media/6980704f1f68d199bc02466f.mp3');
+  waitingAudio.loop = true;
+  waitingAudio.volume = 0.7;
+
+  waitingAudio.play().catch(err => {
+    console.warn('Waiting audio autoplay blocked:', err);
+  });
+}
+
+function stopWaitingAudio() {
+  if (waitingAudio) {
+    waitingAudio.pause();
+    waitingAudio.currentTime = 0;
+    waitingAudio = null;
+  }
+}
+
 
 // ======================
 // START CALL (Button click)
@@ -296,11 +356,16 @@ function startCall(modelId) {
     alert("Invalid agent");
     return;
   }
-callStartedAt = Date.now(); // ⏱️ START TIME
+
+  activeAgentId = modelId;
+  callStartedAt = Date.now();
+
   openCallPopup();
   startCallTimer();
+  playWaitingAudio();
   connectElevenLabsAgent(modelId);
 }
+
 
 
 
@@ -314,9 +379,7 @@ function getCallDurationSeconds() {
   const endedAt = Date.now();
   const durationMs = endedAt - callStartedAt;
 
-  callStartedAt = null; // reset for next call
-
-  return Math.ceil(durationMs / 1000); // 🔥 seconds
+  return Math.ceil(durationMs / 1000);
 }
 // ======================
 // send Call Duration
@@ -327,7 +390,12 @@ async function sendCallDurationToServer(durationSeconds) {
     const res = await fetch('/api/call/end', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ durationSeconds })
+      body: JSON.stringify({ 
+        durationSeconds,
+        agentId: activeAgentId,
+        startTime: callStartedAt,
+        endTime: Date.now()
+      })
     });
 
     const data = await res.json();
@@ -335,11 +403,11 @@ async function sendCallDurationToServer(durationSeconds) {
     if (data.success) {
       document.getElementById('creditCount').innerText =
         data.remainingCredits;
-
-      console.log(
-        `💸 ${data.deductedCredits} credits deducted. Remaining: ${data.remainingCredits}`
-      );
     }
+
+    // ✅ reset AFTER successful logging
+    callStartedAt = null;
+    activeAgentId = null;
 
   } catch (err) {
     console.error('❌ Failed to update credits:', err);
@@ -361,9 +429,52 @@ document.getElementById("hangupBtn")?.addEventListener("click", async () => {
     socket.close();
     socket = null;
   }
-
+  resetCallState();
   closeCallPopup();
 });
+
+/* ===============================
+   RESET Call state
+================================ */
+
+function resetCallState() {
+  // 🔌 socket
+  if (socket) {
+    try { socket.close(); } catch {}
+    socket = null;
+  }
+
+  // 🎙 mic
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+
+  // 🎛 processor
+  if (processor) {
+    processor.disconnect();
+    processor = null;
+  }
+
+  // 🔊 audio context
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+
+  // ⏱ timers
+  stopCallTimer();
+  callStartedAt = null;
+  secondsElapsed = 0;
+
+  // 🔁 audio queue (THIS FIXES DELAY)
+  nextStartTime = 0;
+
+  // 🔔 waiting tone
+  stopWaitingAudio();
+
+  activeAgentId = null;
+}
 
 
 /* ===============================
@@ -465,4 +576,107 @@ async function startCheckout(productId) {
     console.error('Checkout error:', err);
   }
 }
+async function loadCallHistory() {
+  try {
+    const res = await fetch('/api/calls');
+    const calls = await res.json();
+   
+    const container = document.getElementById('chatHistoryList');
+    container.innerHTML = '';
+
+    if (!calls.length) {
+      container.innerHTML = `<p style="opacity:.6">No calls yet</p>`;
+      return;
+    }
+
+    calls.forEach(call => {
+      const item = document.createElement('div');
+      item.className = 'call-item';
+
+      const start = new Date(call.startTime).toLocaleString();
+      const durationText = formatDuration(call.durationSeconds);
+
+      item.innerHTML = `
+        <div class="call-dot"></div>
+        <div class="call-content">
+          <div class="call-header">
+            <span class="agent-name">${call.agentName}</span>
+            <span class="call-time">${start}</span>
+          </div>
+          <div class="call-meta">
+            <span>⏱ ${durationText}</span>
+            <span>💳 ${call.creditsUsed} credits</span>
+          </div>
+        </div>
+      `;
+
+      container.appendChild(item);
+    });
+
+  } catch (err) {
+    console.error('Failed to load call history:', err);
+  }
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) {
+    return `${seconds} sec`;
+  }
+
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+
+  if (secs === 0) {
+    return `${mins} min`;
+  }
+
+  return `${mins} min ${secs} sec`;
+}
+
+async function loadOrders() {
+  try {
+    const res = await fetch('/api/orders');
+    const orders = await res.json();
+
+    const container = document.getElementById('ordersList');
+    container.innerHTML = '';
+
+    if (!orders.length) {
+      container.innerHTML = `<p style="opacity:.6">No orders yet</p>`;
+      return;
+    }
+
+    orders.forEach(order => {
+      const date = new Date(order.createdAt).toLocaleString();
+      const amount = (order.amount / 100).toFixed(2);
+
+      const item = document.createElement('div');
+      item.className = 'order-item';
+
+      item.innerHTML = `
+        <div class="order-row">
+          <div>
+            <strong>${order.productName}</strong>
+            <div style="opacity:.6">${date}</div>
+          </div>
+
+          <div>
+            <span>💳 ${order.creditsAdded} credits</span><br/>
+            <span>$${amount} ${order.currency?.toUpperCase()}</span>
+          </div>
+
+          <div class="order-status ${order.status}">
+            ${order.status.toUpperCase()}
+          </div>
+        </div>
+      `;
+
+      container.appendChild(item);
+    });
+
+  } catch (err) {
+    console.error('Failed to load orders:', err);
+  }
+}
+
 
