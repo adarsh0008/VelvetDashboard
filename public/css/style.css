@@ -759,3 +759,49 @@ body {
   background: #ffe5e5;
   color: #c0392b;
 }
+
+/* ===============================
+   MICROPHONE STATUS CARD
+================================ */
+
+.mic-status-card {
+  margin-top: 30px;
+  padding: 20px;
+  background: #261a3b;
+  border-radius: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 10px 30px rgba(124, 58, 237, 0.1);
+  border: 1px solid #ede9fe;
+}
+
+.mic-status-card h3 {
+  margin: 0 0 5px;
+  color: #a78bfa;
+}
+
+.mic-status-card p {
+  margin: 0;
+  font-weight: 500;
+}
+
+.mic-btn {
+  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.mic-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+}
+
+.mic-btn.hidden {
+  display: none;
+}
