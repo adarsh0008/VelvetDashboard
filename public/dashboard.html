@@ -69,6 +69,20 @@
             </div>
         </section>
 
+        <!-- 🎙 Microphone Status -->
+<div class="mic-status-card">
+  <div class="mic-status-left">
+    <h3>Microphone Status</h3>
+    <p id="micStatusText">Checking...</p>
+  </div>
+
+  <div class="mic-status-right">
+    <button id="micGrantBtn" class="mic-btn" onclick="requestMicPermission()">
+      Grant Permission
+    </button>
+  </div>
+</div>
+
         <!-- ===== MODELS ===== -->
         <section id="models" class="section" style="display:none;">
             <h2>Available Models</h2>

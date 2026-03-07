@@ -4,6 +4,7 @@
 let activeAgentId = null;
 let waitingAudio = null;
 document.addEventListener('DOMContentLoaded', async () => {
+  checkMicrophoneStatus();
     try {
         const response = await fetch('/api/user');
         if (response.status === 401) {
@@ -38,6 +39,64 @@ try {
 }
 
 });
+
+/* ===============================
+   MICROPHONE STATUS
+================================ */
+
+async function checkMicrophoneStatus() {
+  try {
+    if (!navigator.permissions) {
+      updateMicUI("Permission API not supported", false);
+      return;
+    }
+
+    const permission = await navigator.permissions.query({ name: 'microphone' });
+
+    if (permission.state === 'granted') {
+      updateMicUI("🟢 Microphone access granted", true);
+    } else if (permission.state === 'denied') {
+      updateMicUI("🔴 Microphone blocked", false);
+    } else {
+      updateMicUI("🟡 Permission required", false);
+    }
+
+    permission.onchange = () => {
+      checkMicrophoneStatus();
+    };
+
+  } catch (err) {
+    console.error("Mic permission check failed:", err);
+  }
+}
+
+function updateMicUI(message, granted) {
+  const text = document.getElementById('micStatusText');
+  const btn = document.getElementById('micGrantBtn');
+
+  if (text) text.innerText = message;
+
+  if (granted) {
+    btn?.classList.add('hidden');
+  } else {
+    btn?.classList.remove('hidden');
+  }
+}
+
+async function requestMicPermission() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // Immediately stop after granting permission
+    stream.getTracks().forEach(track => track.stop());
+
+    checkMicrophoneStatus();
+
+  } catch (err) {
+    console.error("Microphone permission denied:", err);
+    checkMicrophoneStatus();
+  }
+}
 
 /* ===============================
    2. Load Models
@@ -351,7 +410,19 @@ function stopWaitingAudio() {
 // ======================
 // START CALL (Button click)
 // ======================
+
 function startCall(modelId) {
+
+  const credits = parseInt(
+    document.getElementById('creditCount').innerText || 0
+  );
+
+  if (credits <= 0) {
+    alert("⚠️ You have no credits left. Please top up.");
+    openTopUp();
+    return;
+  }
+
   if (!modelId) {
     alert("Invalid agent");
     return;
@@ -364,8 +435,27 @@ function startCall(modelId) {
   startCallTimer();
   playWaitingAudio();
   connectElevenLabsAgent(modelId);
-}
 
+  // 🔥 AUTO DISCONNECT TIMER
+  const allowedSeconds = credits;
+
+  creditTimeout = setTimeout(() => {
+
+    console.log("⚠️ Credits finished. Auto disconnect.");
+
+    if (socket) {
+      socket.close();
+      socket = null;
+    }
+
+    stopStreaming?.();
+    resetCallState();
+    closeCallPopup();
+
+    alert("Credits finished. Call disconnected.");
+
+  }, allowedSeconds * 1000);
+}
 
 
 
@@ -401,9 +491,25 @@ async function sendCallDurationToServer(durationSeconds) {
     const data = await res.json();
 
     if (data.success) {
-      document.getElementById('creditCount').innerText =
-        data.remainingCredits;
+
+  const creditEl = document.getElementById('creditCount');
+  creditEl.innerText = data.remainingCredits;
+
+  // 🚨 If credits finished during call
+  if (data.remainingCredits <= 0) {
+
+    alert("⚠️ Credits finished. Call disconnected.");
+
+    if (socket) {
+      socket.close();
+      socket = null;
     }
+
+    stopStreaming?.();
+    resetCallState();
+    closeCallPopup();
+  }
+}
 
     // ✅ reset AFTER successful logging
     callStartedAt = null;
@@ -438,6 +544,10 @@ document.getElementById("hangupBtn")?.addEventListener("click", async () => {
 ================================ */
 
 function resetCallState() {
+  if (creditTimeout) {
+  clearTimeout(creditTimeout);
+  creditTimeout = null;
+}
   // 🔌 socket
   if (socket) {
     try { socket.close(); } catch {}
