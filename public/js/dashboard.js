@@ -3,40 +3,55 @@
 ================================ */
 let activeAgentId = null;
 let waitingAudio = null;
-document.addEventListener('DOMContentLoaded', async () => {
-  checkMicrophoneStatus();
-    try {
-        const response = await fetch('/api/user');
-        if (response.status === 401) {
-            window.location.href = '/';
-            return;
-        }
 
-        const user = await response.json();
+async function loadWalletData() {
 
-        document.getElementById('userName').innerText = user.displayName;
-        document.getElementById('userAvatar').src = user.avatar;
-        document.getElementById('creditCount').innerText = user.wallet.balance;
+  try {
 
-    } catch (err) {
-        console.error('User load error:', err);
+    const response = await fetch('/api/user');
+
+    if (response.status === 401) {
+      window.location.href = '/';
+      return;
     }
-    // ======================
-// Load Dashboard Stats
-// ======================
-try {
-  const statsRes = await fetch('/api/dashboard/stats');
-  const stats = await statsRes.json();
 
-  document.getElementById('activeModels').innerText =
-    stats.activeModels ?? 0;
+    const user = await response.json();
 
-  document.getElementById('totalChats').innerText =
-    stats.totalChats ?? 0;
+    document.getElementById('userName').innerText = user.displayName;
+    document.getElementById('userAvatar').src = user.avatar;
+    document.getElementById('creditCount').innerText = user.wallet.balance;
 
-} catch (err) {
-  console.error('Stats load error:', err);
+  } catch (err) {
+    console.error('Wallet load error:', err);
+  }
+
 }
+
+async function loadDashboardStats() {
+
+  try {
+
+    const statsRes = await fetch('/api/dashboard/stats');
+    const stats = await statsRes.json();
+
+    document.getElementById('activeModels').innerText =
+      stats.activeModels ?? 0;
+
+    document.getElementById('totalChats').innerText =
+      stats.totalChats ?? 0;
+
+  } catch (err) {
+    console.error('Stats load error:', err);
+  }
+
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+
+  checkMicrophoneStatus();
+document.getElementById('micStatusCard').style.display = 'flex';
+  await loadWalletData();
+  await loadDashboardStats();
 
 });
 
@@ -98,6 +113,8 @@ async function requestMicPermission() {
   }
 }
 
+
+
 /* ===============================
    2. Load Models
 ================================ */
@@ -120,7 +137,7 @@ async function loadModels() {
                 <div class="model-card-content">
                     <div class="model-name">${model.name}</div>
                     <div class="model-rate">
-                        ${model.ratePerMinute} credits / minute
+                        ${model.ratePerMinute} credits / Second
                     </div>
                     <button class="model-action-btn" onclick="startCall('agent_${model.elevenLabsAgentId}')">
                         Talk Now
@@ -147,27 +164,63 @@ function showPlanSkeletons(count = 6) {
     }
 }
 
+/* ===============================
+    2. Toast Notifications
+================================ */
+
+function showToast(message, type = "info", duration = 4000) {
+
+  const container = document.getElementById("toastContainer");
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.innerText = message;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(100%)";
+
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, duration);
+}
 
 /* ===============================
    3. Section Switcher
 ================================ */
 function showSection(id, el) {
-    document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
-    document.getElementById(id).style.display = 'block';
 
-    document.querySelectorAll('.menu li').forEach(li => li.classList.remove('active'));
-    el.classList.add('active');
+  document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
+  document.getElementById(id).style.display = 'block';
 
-    if (id === 'models') {
-        loadModels();
-    }
-    if (id === 'chat-history') {
-      loadCallHistory(); // 🔥 here
-    }
-    if (id === 'orders') {
-      loadOrders();
-    }
+  document.querySelectorAll('.menu li').forEach(li => li.classList.remove('active'));
+  el.classList.add('active');
 
+  const micCard = document.getElementById('micStatusCard');
+
+  // 🔥 Show mic only on dashboard
+  if (id === 'wallet') {
+    if (micCard) micCard.style.display = 'flex';
+    loadWalletData?.();
+    loadDashboardStats?.();
+  } else {
+    if (micCard) micCard.style.display = 'none';
+  }
+
+  if (id === 'models') {
+    loadModels();
+  }
+
+  if (id === 'chat-history') {
+    loadCallHistory();
+  }
+
+  if (id === 'orders') {
+    loadOrders();
+  }
 }
 
 /* ===============================
@@ -418,7 +471,7 @@ function startCall(modelId) {
   );
 
   if (credits <= 0) {
-    alert("⚠️ You have no credits left. Please top up.");
+    showToast("You have no credits left. Please top up.", "warning");
     openTopUp();
     return;
   }
@@ -439,22 +492,26 @@ function startCall(modelId) {
   // 🔥 AUTO DISCONNECT TIMER
   const allowedSeconds = credits;
 
-  creditTimeout = setTimeout(() => {
+  creditTimeout = setTimeout(async () => {
 
-    console.log("⚠️ Credits finished. Auto disconnect.");
+  console.log("⚠️ Credits finished. Auto disconnect.");
 
-    if (socket) {
-      socket.close();
-      socket = null;
-    }
+  const durationSeconds = getCallDurationSeconds();
 
-    stopStreaming?.();
-    resetCallState();
-    closeCallPopup();
+  // 🔥 send deduction to server
+  await sendCallDurationToServer(durationSeconds);
 
-    alert("Credits finished. Call disconnected.");
+  if (socket) {
+    socket.close();
+    socket = null;
+  }
 
-  }, allowedSeconds * 1000);
+  stopStreaming?.();
+  resetCallState();
+  closeCallPopup();
+
+
+}, allowedSeconds * 1000);
 }
 
 
@@ -498,7 +555,7 @@ async function sendCallDurationToServer(durationSeconds) {
   // 🚨 If credits finished during call
   if (data.remainingCredits <= 0) {
 
-    alert("⚠️ Credits finished. Call disconnected.");
+    showToast("⚠️ Credits finished. Call disconnected.", "warning");
 
     if (socket) {
       socket.close();
