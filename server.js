@@ -10,6 +10,8 @@ const path = require('path');
 const Product = require('./models/Product');
 const User = require('./models/User');
 const Model = require('./models/Agent');
+const AppSettings = require('./models/AppSettings');
+const geoip = require('geoip-lite');
 const { 
   findContactByEmail, 
   createContact, 
@@ -136,7 +138,6 @@ passport.deserializeUser(async (id, done) => {
    3. Middleware
 ================================ */
 
-app.use(express.static('public'));
 
 const sessionStore = MongoStore.create({
   mongoUrl: uri,
@@ -161,7 +162,39 @@ app.use(
 
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(restrictByCountry);
+app.use(express.static('public'));
 
+
+async function restrictByCountry(req, res, next) {
+
+  // 🔥 allow webhooks always
+  if (req.originalUrl.startsWith('/webhooks')) {
+    return next();
+  }
+
+  try {
+    const ip =
+      req.headers['x-forwarded-for']?.split(',')[0] ||
+      req.socket.remoteAddress ||
+      '';
+
+    const geo = geoip.lookup(ip);
+
+    const settings = await AppSettings.findOne();
+    const allowedCountries = settings?.allowedCountries || [];
+
+    if (!geo || !allowedCountries.includes(geo.country)) {
+      return res.status(403).send('Access not allowed in your region');
+    }
+
+    next();
+
+  } catch (err) {
+    console.error('Country restriction error:', err);
+    next();
+  }
+}
 /* ===============================
    4. AUTH ROUTES
 ================================ */
@@ -601,8 +634,87 @@ app.get('/api/orders', ensureAuth, async (req, res) => {
   }
 });
 
+// ===============================
+// Settings Route
+// ===============================
 
+app.get('/api/settings', async (req, res) => {
+  try {
+    let settings = await AppSettings.findOne();
 
+    if (!settings) {
+      settings = await AppSettings.create({});
+    }
+
+    res.json(settings);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load settings' });
+  }
+});
+
+// ===============================
+// COUNTRY UPDATE ROUTE
+// ===============================
+
+app.post('/api/settings/countries', async (req, res) => {
+  try {
+    const { countries } = req.body;
+
+    let settings = await AppSettings.findOne();
+    if (!settings) settings = await AppSettings.create({});
+
+    settings.allowedCountries = countries;
+    await settings.save();
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update countries' });
+  }
+});
+
+// ===============================
+// MANAGE COUPONS
+// ===============================
+
+app.post('/api/settings/coupons', async (req, res) => {
+  try {
+    const { code, type, value } = req.body;
+
+    let settings = await AppSettings.findOne();
+    if (!settings) settings = await AppSettings.create({});
+
+    settings.coupons.push({ code, type, value });
+    await settings.save();
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add coupon' });
+  }
+});
+
+app.delete('/api/settings/coupons/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    const settings = await AppSettings.findOne();
+
+    settings.coupons = settings.coupons.filter(c => c.code !== code);
+
+    await settings.save();
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete coupon' });
+  }
+});
+
+// ===============================
+// SETTINGS ENDPOINTS
+// ===============================
+app.get('/settings', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'settings.html'));
+});
 
 /* ===============================
     Eleven Labs Code

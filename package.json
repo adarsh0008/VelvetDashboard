@@ -17,6 +17,7 @@
     "express": "^5.2.1",
     "express-session": "^1.18.2",
     "express-ws": "^5.0.2",
+    "geoip-lite": "^1.4.10",
     "mongoose": "^9.1.2",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

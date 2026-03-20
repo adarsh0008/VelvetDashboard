@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>App Settings</title>
+  <style>
+    body { font-family: Arial; padding: 30px; }
+    input, button { padding: 8px; margin: 5px; }
+    .card { border:1px solid #ddd; padding:20px; margin-bottom:20px; }
+  </style>
+</head>
+<body>
+
+<h2>⚙️ App Settings</h2>
+
+<!-- COUNTRIES -->
+<div class="card">
+  <h3>Allowed Countries</h3>
+
+  <input id="countryInput" placeholder="e.g. US, AU">
+  <button onclick="addCountry()">Add</button>
+
+  <ul id="countryList"></ul>
+</div>
+
+<!-- COUPONS -->
+<div class="card">
+  <h3>Coupons</h3>
+
+  <input id="couponCode" placeholder="Code">
+  <input id="couponValue" placeholder="Value">
+  
+  <select id="couponType">
+    <option value="percentage">%</option>
+    <option value="fixed">Fixed</option>
+  </select>
+
+  <button onclick="addCoupon()">Add Coupon</button>
+
+  <ul id="couponList"></ul>
+</div>
+
+<script>
+async function loadSettings() {
+  const res = await fetch('/api/settings');
+  const data = await res.json();
+
+  const countryList = document.getElementById('countryList');
+  countryList.innerHTML = '';
+
+  data.allowedCountries.forEach(c => {
+    const li = document.createElement('li');
+    li.innerText = c;
+    countryList.appendChild(li);
+  });
+
+  const couponList = document.getElementById('couponList');
+  couponList.innerHTML = '';
+
+  data.coupons.forEach(c => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      ${c.code} - ${c.value}${c.type === 'percentage' ? '%' : '$'}
+      <button onclick="deleteCoupon('${c.code}')">Delete</button>
+    `;
+    couponList.appendChild(li);
+  });
+}
+
+async function addCountry() {
+  const val = document.getElementById('countryInput').value;
+
+  const current = await fetch('/api/settings').then(r => r.json());
+
+  current.allowedCountries.push(val);
+
+  await fetch('/api/settings/countries', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ countries: current.allowedCountries })
+  });
+
+  loadSettings();
+}
+
+async function addCoupon() {
+  const code = document.getElementById('couponCode').value;
+  const value = document.getElementById('couponValue').value;
+  const type = document.getElementById('couponType').value;
+
+  await fetch('/api/settings/coupons', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, value, type })
+  });
+
+  loadSettings();
+}
+
+async function deleteCoupon(code) {
+  await fetch(`/api/settings/coupons/${code}`, {
+    method: 'DELETE'
+  });
+
+  loadSettings();
+}
+
+loadSettings();
+</script>
+
+</body>
+</html>
