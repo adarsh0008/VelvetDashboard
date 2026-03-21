@@ -280,7 +280,8 @@ app.get('/api/products', ensureAuth, async (req, res) => {
 
 app.post('/api/checkout/create', ensureAuth, async (req, res) => {
   try {
-    const { productId } = req.body;
+    //const { productId } = req.body;
+    const { productId, couponCode } = req.body;
 
     if (!productId) {
       return res.status(400).json({ error: 'Product ID is required' });
@@ -290,23 +291,63 @@ app.post('/api/checkout/create', ensureAuth, async (req, res) => {
     if (!product || !product.price) {
       return res.status(404).json({ error: 'Product not found' });
     }
+
+    // ===============================
+// APPLY COUPON
+// ===============================
+
+let finalPrice = product.price;
+
+if (couponCode) {
+  const settings = await AppSettings.findOne();
+
+  const coupon = settings?.coupons?.find(
+    c => c.code.toLowerCase() === couponCode.toLowerCase() && c.active
+  );
+
+  if (coupon) {
+    if (coupon.type === 'percentage') {
+      finalPrice = finalPrice * (1 - coupon.value / 100);
+    } else {
+      finalPrice = finalPrice - coupon.value;
+    }
+
+    // prevent negative price
+    finalPrice = Math.max(0, finalPrice);
+
+    console.log(`🎟 Coupon applied: ${couponCode}`);
+  } else {
+    console.log(`⚠️ Invalid coupon: ${couponCode}`);
+  }
+}
+
     // 🔥 Create DB entry BEFORE Stripe
     const purchase = await Purchase.create({
       user: req.user._id,
       productId: product.productId,
       productName: product.name,
-      amount: product.price * 100,
+      amount: finalPrice * 100,
+      //amount: product.price * 100,
       currency: product.currency,
       creditsAdded: product.credits,
       status: 'initiated'
     });
 
 
-    const session = await createCheckoutSession({
+    /*const session = await createCheckoutSession({
       userId: req.user._id.toString(),
       product,
       purchaseId: purchase._id.toString() 
-    });
+    }); */
+
+  const session = await createCheckoutSession({
+  userId: req.user._id.toString(),
+  product: {
+    ...product.toObject(),
+    price: finalPrice // 🔥 important
+  },
+  purchaseId: purchase._id.toString()
+});
 
     res.json({ checkoutUrl: session.url });
 

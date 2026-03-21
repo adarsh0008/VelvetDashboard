@@ -845,6 +845,18 @@ body {
 .toast.info {
   background: linear-gradient(135deg,#7b5cff,#5e35b1);
 }
+.coupon-box {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.coupon-input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    width: 220px;
+    font-size: 14px;
+}
 
 @keyframes toastSlide {
   from {
