@@ -654,7 +654,7 @@ async function openTopUp() {
     loadPlans();
 }
 
-function closeTopUp() {
+/* function closeTopUp() {
     document.getElementById('topUpModal').style.display = 'none';
 }
 
@@ -662,7 +662,7 @@ function closeTopUp() {
    LOAD CREDIT PLANS
 ================================ */
 
-async function loadPlans() {
+/* async function loadPlans() {
     try {
         const res = await fetch('/api/products');
         const plans = await res.json();
@@ -704,6 +704,260 @@ async function loadPlans() {
     }
 }
 
+
+/* ===============================
+   COUPON STATE MANAGEMENT
+================================ */
+
+let activeCoupon = null;
+let currentPlans = [];
+
+// Apply coupon button click handler
+async function applyCoupon() {
+    const couponCode = document.getElementById('couponInput').value.trim();
+    
+    if (!couponCode) {
+        showCouponMessage('Please enter a coupon code', 'error');
+        return;
+    }
+    
+    const applyBtn = document.getElementById('applyCouponBtn');
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Applying...';
+    
+    try {
+        // Validate coupon with backend
+        const response = await fetch('/api/coupons/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ couponCode })
+        });
+        
+        const result = await response.json();
+        
+        if (result.valid) {
+            activeCoupon = result.coupon;
+            showCouponMessage(`✅ Coupon applied! ${result.discountText} discount`, 'success');
+            updateAllPlanPrices(); // Update all plan prices with discount
+        } else {
+            activeCoupon = null;
+            showCouponMessage(result.message || 'Invalid coupon code', 'error');
+            resetAllPlanPrices(); // Reset to original prices
+        }
+        
+    } catch (err) {
+        console.error('Coupon validation error:', err);
+        showCouponMessage('Failed to validate coupon. Please try again.', 'error');
+        activeCoupon = null;
+        resetAllPlanPrices();
+    } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply';
+    }
+}
+
+// Show message in coupon section
+function showCouponMessage(message, type) {
+    const messageDiv = document.getElementById('couponMessage');
+    messageDiv.textContent = message;
+    messageDiv.className = `coupon-message ${type}`;
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        if (messageDiv.textContent === message) {
+            messageDiv.textContent = '';
+            messageDiv.className = 'coupon-message';
+        }
+    }, 5000);
+}
+
+// Calculate discounted price
+function calculateDiscountedPrice(originalPrice, coupon) {
+    if (!coupon) return originalPrice;
+    
+    let discounted = originalPrice;
+    
+    if (coupon.type === 'percentage') {
+        discounted = originalPrice * (1 - coupon.value / 100);
+    } else if (coupon.type === 'fixed') {
+        discounted = originalPrice - coupon.value;
+    }
+    
+    return Math.max(0, discounted);
+}
+
+// Update all plan cards with discounted prices
+function updateAllPlanPrices() {
+    const planCards = document.querySelectorAll('.plan-card');
+    
+    planCards.forEach(card => {
+        const originalPrice = parseFloat(card.dataset.originalPrice);
+        const productId = card.dataset.productId;
+        
+        if (activeCoupon) {
+            const discountedPrice = calculateDiscountedPrice(originalPrice, activeCoupon);
+            const priceElement = card.querySelector('.plan-price');
+            const priceContainer = card.querySelector('.price-container');
+            
+            if (discountedPrice !== originalPrice) {
+                // Show strikethrough original price
+                priceContainer.innerHTML = `
+                    <span class="original-price">$${originalPrice.toFixed(2)}</span>
+                    <span class="discounted-price">$${discountedPrice.toFixed(2)}</span>
+                `;
+                priceElement.style.display = 'none';
+                
+                // Store discounted price for checkout
+                card.dataset.discountedPrice = discountedPrice;
+            }
+        }
+    });
+}
+
+// Reset all plan prices to original
+function resetAllPlanPrices() {
+    const planCards = document.querySelectorAll('.plan-card');
+    
+    planCards.forEach(card => {
+        const originalPrice = parseFloat(card.dataset.originalPrice);
+        const priceElement = card.querySelector('.plan-price');
+        const priceContainer = card.querySelector('.price-container');
+        
+        // Restore original display
+        priceElement.style.display = 'block';
+        priceElement.textContent = `$${originalPrice.toFixed(2)}`;
+        priceContainer.innerHTML = '';
+        priceContainer.appendChild(priceElement);
+        
+        delete card.dataset.discountedPrice;
+    });
+}
+
+// Modified loadPlans function with price containers
+async function loadPlans() {
+    try {
+        const res = await fetch('/api/products');
+        const plans = await res.json();
+        currentPlans = plans;
+        
+        const grid = document.getElementById('plansGrid');
+        grid.innerHTML = '';
+        
+        plans.forEach((plan, index) => {
+            const card = document.createElement('div');
+            card.className = 'plan-card';
+            card.dataset.productId = plan.productId;
+            card.dataset.originalPrice = plan.price;
+            
+            if (index === Math.floor(plans.length / 2)) {
+                card.classList.add('featured');
+            }
+            
+            // Create price container
+            const priceContainer = document.createElement('div');
+            priceContainer.className = 'price-container';
+            
+            const priceElement = document.createElement('div');
+            priceElement.className = 'plan-price';
+            priceElement.textContent = `$${plan.price.toFixed(2)}`;
+            priceContainer.appendChild(priceElement);
+            
+            card.innerHTML = `
+                <div class="plan-title">${plan.name}</div>
+                ${priceContainer.outerHTML}
+                <div class="plan-meta">${plan.currency || 'USD'}</div>
+                <button class="plan-btn" onclick="startCheckout('${plan.productId}')">
+                    Buy Now
+                </button>
+            `;
+            
+            // Re-insert price element reference
+            const newCard = grid.appendChild(card);
+            const newPriceElement = newCard.querySelector('.plan-price');
+            const newPriceContainer = newCard.querySelector('.price-container');
+            
+            // If there's an active coupon, apply discount to newly loaded plans
+            if (activeCoupon) {
+                const discountedPrice = calculateDiscountedPrice(plan.price, activeCoupon);
+                if (discountedPrice !== plan.price) {
+                    newPriceContainer.innerHTML = `
+                        <span class="original-price">$${plan.price.toFixed(2)}</span>
+                        <span class="discounted-price">$${discountedPrice.toFixed(2)}</span>
+                    `;
+                    newCard.dataset.discountedPrice = discountedPrice;
+                }
+            }
+        });
+        
+    } catch (err) {
+        console.error('Failed to load plans:', err);
+        const grid = document.getElementById('plansGrid');
+        grid.innerHTML = `
+            <p style="text-align:center;opacity:.7">
+                Failed to load plans. Please try again.
+            </p>
+        `;
+    }
+}
+
+// Modified startCheckout to use discounted price if available
+async function startCheckout(productId) {
+    try {
+        const planCard = document.querySelector(`.plan-card[data-product-id="${productId}"]`);
+        const discountedPrice = planCard?.dataset.discountedPrice;
+        const couponCode = document.getElementById('couponInput')?.value?.trim() || '';
+        
+        // Disable buttons
+        document.querySelectorAll('.plan-btn').forEach(btn => {
+            btn.disabled = true;
+            btn.innerText = 'Redirecting...';
+        });
+        
+        const payload = {
+            productId,
+            couponCode
+        };
+        
+        // If we have a discounted price from coupon preview, send it to ensure backend uses it
+        if (discountedPrice && activeCoupon) {
+            payload.expectedPrice = discountedPrice;
+        }
+        
+        const res = await fetch('/api/checkout/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok || !data.checkoutUrl) {
+            throw new Error(data.error || 'Checkout failed');
+        }
+        
+        window.location.href = data.checkoutUrl;
+        
+    } catch (err) {
+        alert('Unable to start checkout. Please try again.');
+        
+        document.querySelectorAll('.plan-btn').forEach(btn => {
+            btn.disabled = false;
+            btn.innerText = 'Buy Now';
+        });
+        
+        console.error('Checkout error:', err);
+    }
+}
+
+// Clear coupon when modal closes
+function closeTopUp() {
+    document.getElementById('topUpModal').style.display = 'none';
+    // Reset coupon state when modal closes
+    activeCoupon = null;
+    document.getElementById('couponInput').value = '';
+    document.getElementById('couponMessage').textContent = '';
+    resetAllPlanPrices();
+}
 
 /* ===============================
    BUY PLAN (Placeholder)

@@ -108,20 +108,29 @@
         </section>
 
     </main>
-    <!-- ================= TOP UP MODAL ================= -->
+<!-- ================= TOP UP MODAL ================= -->
 <div id="topUpModal" class="modal-overlay" style="display:none;">
     <div class="modal-box">
         <div class="modal-header">
             <h3>Top Up Credits</h3>
             <span class="close-modal" onclick="closeTopUp()">&times;</span>
         </div>
-        <div class="coupon-box">
-    <input 
-        id="couponInput" 
-        placeholder="Enter coupon code (optional)" 
-        class="coupon-input"
-    >
-</div>
+        
+        <!-- Enhanced Coupon Section -->
+        <div class="coupon-section">
+            <div class="coupon-input-group">
+                <input 
+                    id="couponInput" 
+                    placeholder="Enter coupon code" 
+                    class="coupon-input"
+                >
+                <button id="applyCouponBtn" class="apply-coupon-btn" onclick="applyCoupon()">
+                    Apply
+                </button>
+            </div>
+            <div id="couponMessage" class="coupon-message"></div>
+        </div>
+        
         <div id="plansGrid" class="plans-grid">
             <!-- Plans injected by dashboard.js -->
         </div>

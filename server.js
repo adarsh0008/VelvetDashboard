@@ -63,6 +63,40 @@ async function connectDB() {
 connectDB();
 
 /* ===============================
+   SIMPLE BASIC AUTH FOR SETTINGS PAGE
+================================ */
+
+// Basic auth middleware for settings page
+const basicAuth = require('basic-auth');
+
+const authenticateAdmin = (req, res, next) => {
+    // Skip auth for non-settings routes
+    if (!req.originalUrl.startsWith('/settings') && 
+        !req.originalUrl.startsWith('/api/settings')) {
+        return next();
+    }
+    
+    const credentials = basicAuth(req);
+    
+    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    
+    if (!credentials || 
+        credentials.name !== adminUsername || 
+        credentials.pass !== adminPassword) {
+        
+        // Set WWW-Authenticate header to trigger browser login popup
+        res.set('WWW-Authenticate', 'Basic realm="Admin Access"');
+        return res.status(401).send('Authentication required');
+    }
+    
+    next();
+};
+
+// Apply the middleware to your app
+app.use(authenticateAdmin);
+
+/* ===============================
    2. Passport Google Strategy
 ================================ */
 
@@ -162,7 +196,7 @@ app.use(
 
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(restrictByCountry);
+// app.use(restrictByCountry);
 app.use(express.static('public'));
 
 
@@ -280,83 +314,109 @@ app.get('/api/products', ensureAuth, async (req, res) => {
 
 app.post('/api/checkout/create', ensureAuth, async (req, res) => {
   try {
-    //const { productId } = req.body;
     const { productId, couponCode } = req.body;
-
+    
     if (!productId) {
       return res.status(400).json({ error: 'Product ID is required' });
     }
-
+    
     const product = await Product.findOne({ productId });
     if (!product || !product.price) {
       return res.status(404).json({ error: 'Product not found' });
     }
-
-    // ===============================
-// APPLY COUPON
-// ===============================
-
-let finalPrice = product.price;
-
-if (couponCode) {
-  const settings = await AppSettings.findOne();
-
-  const coupon = settings?.coupons?.find(
-    c => c.code.toLowerCase() === couponCode.toLowerCase() && c.active
-  );
-
-  if (coupon) {
-    if (coupon.type === 'percentage') {
-      finalPrice = finalPrice * (1 - coupon.value / 100);
-    } else {
-      finalPrice = finalPrice - coupon.value;
+    
+    let finalPrice = product.price;
+    
+    // Apply coupon if provided
+    if (couponCode) {
+      const settings = await AppSettings.findOne();
+      const coupon = settings?.coupons?.find(
+        c => c.code.toLowerCase() === couponCode.toLowerCase() && c.active
+      );
+      
+      if (coupon) {
+        if (coupon.type === 'percentage') {
+          finalPrice = finalPrice * (1 - coupon.value / 100);
+        } else {
+          finalPrice = finalPrice - coupon.value;
+        }
+        finalPrice = Math.max(0, finalPrice);
+        console.log(`🎟 Coupon applied: ${couponCode}, new price: $${finalPrice}`);
+      }
     }
-
-    // prevent negative price
-    finalPrice = Math.max(0, finalPrice);
-
-    console.log(`🎟 Coupon applied: ${couponCode}`);
-  } else {
-    console.log(`⚠️ Invalid coupon: ${couponCode}`);
-  }
-}
-
-    // 🔥 Create DB entry BEFORE Stripe
+    
+    // Create purchase record
     const purchase = await Purchase.create({
       user: req.user._id,
       productId: product.productId,
       productName: product.name,
       amount: finalPrice * 100,
-      //amount: product.price * 100,
       currency: product.currency,
       creditsAdded: product.credits,
-      status: 'initiated'
+      status: 'initiated',
+      couponCode: couponCode || null  // Store which coupon was used
     });
-
-
-    /*const session = await createCheckoutSession({
+    
+    const session = await createCheckoutSession({
       userId: req.user._id.toString(),
-      product,
-      purchaseId: purchase._id.toString() 
-    }); */
-
-  const session = await createCheckoutSession({
-  userId: req.user._id.toString(),
-  product: {
-    ...product.toObject(),
-    price: finalPrice // 🔥 important
-  },
-  purchaseId: purchase._id.toString()
-});
-
+      product: {
+        ...product.toObject(),
+        price: finalPrice
+      },
+      purchaseId: purchase._id.toString()
+    });
+    
     res.json({ checkoutUrl: session.url });
-
+    
   } catch (err) {
     console.error('❌ Checkout error:', err);
     res.status(500).json({ error: 'Checkout failed' });
   }
 });
 
+/* ===============================
+   COUPON VALIDATION ENDPOINT
+================================ */
+
+app.post('/api/coupons/validate', async (req, res) => {
+    try {
+        const { couponCode } = req.body;
+        
+        if (!couponCode) {
+            return res.json({ valid: false, message: 'No coupon code provided' });
+        }
+        
+        const settings = await AppSettings.findOne();
+        const coupon = settings?.coupons?.find(
+            c => c.code.toLowerCase() === couponCode.toLowerCase() && c.active
+        );
+        
+        if (!coupon) {
+            return res.json({ valid: false, message: 'Invalid or expired coupon code' });
+        }
+        
+        let discountText = '';
+        if (coupon.type === 'percentage') {
+            discountText = `${coupon.value}% off`;
+        } else {
+            discountText = `$${coupon.value} off`;
+        }
+        
+        res.json({
+            valid: true,
+            coupon: {
+                code: coupon.code,
+                type: coupon.type,
+                value: coupon.value
+            },
+            discountText
+        });
+        
+    } catch (err) {
+        console.error('Coupon validation error:', err);
+        res.status(500).json({ valid: false, message: 'Server error' });
+    }
+});
 /* ===============================
    7. GHL MODEL WEBHOOK
 ================================ */
@@ -757,6 +817,11 @@ app.get('/settings', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'settings.html'));
 });
 
+// Logout for basic auth (just sends 401 to clear browser cache)
+app.get('/admin/logout', (req, res) => {
+    res.set('WWW-Authenticate', 'Basic realm="Admin Access", charset="UTF-8"');
+    res.status(401).send('Logged out. Close browser tab to clear credentials.');
+});
 /* ===============================
     Eleven Labs Code
 ================================ */
