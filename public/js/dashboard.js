@@ -709,7 +709,7 @@ async function loadPlans() {
    BUY PLAN (Placeholder)
 ================================ */
 
-async function startCheckout(productId) {
+ /* async function startCheckout(productId) {
   try {
     // Optional UX: disable all buttons
     document.querySelectorAll('.plan-btn').forEach(btn => {
@@ -743,6 +743,55 @@ async function startCheckout(productId) {
     console.error('Checkout error:', err);
   }
 }
+*/
+
+async function startCheckout(productId) {
+  try {
+
+    // 🔥 Get coupon value
+    const couponCode =
+      document.getElementById('couponInput')?.value?.trim() || '';
+
+    // Optional UX: disable all buttons
+    document.querySelectorAll('.plan-btn').forEach(btn => {
+      btn.disabled = true;
+      btn.innerText = 'Redirecting...';
+    });
+
+    const res = await fetch('/api/checkout/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+
+      // 🔥 send coupon to backend
+      body: JSON.stringify({
+        productId,
+        couponCode
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.checkoutUrl) {
+      throw new Error(data.error || 'Checkout failed');
+    }
+
+    // 🔥 Redirect to Stripe Checkout
+    window.location.href = data.checkoutUrl;
+
+  } catch (err) {
+
+    alert('Unable to start checkout. Please try again.');
+
+    // Re-enable buttons
+    document.querySelectorAll('.plan-btn').forEach(btn => {
+      btn.disabled = false;
+      btn.innerText = 'Buy Now';
+    });
+
+    console.error('Checkout error:', err);
+  }
+}
+
 async function loadCallHistory() {
   try {
     const res = await fetch('/api/calls');
